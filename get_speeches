@@ -1,0 +1,310 @@
+# Script to get all "first-speaches" for members of parliment
+#Links:
+#   http://hidemyass.com/proxy-list/
+#   http://www.useragentstring.com/pages/useragentstring.php
+#   http://showmemyip.com
+#   http://whatismyuseragent.dotdoh.com
+
+
+import mechanize, cookielib, os, random, time, pickle
+from bs4 import BeautifulSoup
+
+
+
+#_____________SET UP BROWSER____________
+
+#get IP's from http://hidemyass.com/proxy-list/
+proxies = ['168.63.84.231:3128',
+           '187.85.179.170:3128',
+           '116.112.66.102:808']
+
+user_agents = ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8) AppleWebKit/537.13+ (KHTML, like Gecko) Version/5.1.7 Safari/534.57.2',
+                               'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:23.0) Gecko/20131011 Firefox/23.0',
+                               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:24.0) Gecko/20100101 Firefox/24.0',
+                               'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.60 Safari/537.17',]
+
+
+
+def clear_cookies(browser):
+    '''re-sets the "cookie_jar"'''
+    cookie_jar = cookielib.LWPCookieJar()
+    browser.set_cookiejar(cookie_jar)
+
+def change_user_agent(browser):
+    '''picks a random user-agent string from list'''
+    global user_agents
+    index = random.randrange(0, len(user_agents))
+    browser.addheaders = [('User-agent', user_agents[index])]
+
+def change_proxy(browser):
+    '''picks a random proxie from list'''
+    global proxies
+    index = random.randrange(0, len(proxies))
+    browser.set_proxies({'http': proxies[index]})
+
+def anonymize(browser):
+    clear_cookies(browser)
+    change_user_agent(browser)
+    #change_proxy(browser)
+
+
+def anon_test(browser):
+    url = 'http://showip.net/'
+    soup = BeautifulSoup(browser.open(url))
+    ip_line = soup.findAll('input', id="checkip")
+    #agent_line = soup.findAll('h3', id="browservalue")
+    print('------------')
+    print(ip_line)
+    #print(agent_line)
+    print('------------')
+
+
+#______________ IO STUFF __________#
+
+def data_dump():
+    '''dumps latest data to file. Overwrits pervious'''
+    global data
+    f = open('data.txt', 'w')
+    pickle.dump(data, f)
+    f.close()
+
+def data_load():
+    '''loads data from file'''
+    global data
+    f = open('data.txt', 'r')
+    data = pickle.load(f)
+    f.close()
+    return data
+
+##__ initialise global varible 'data' with latest data __##
+
+data = data_load()
+
+##_________ Helper Functions _________##
+
+def add_electorate(elect_name):
+    global data
+    d = dict([('electorate', elect_name)])
+    data.append(d)
+
+def add_link(elect_name, link_type, link):
+    global data
+    for d in data:
+        if d['electorate'] == elect_name:
+            d[link_type] = link
+    
+def data_from_links(filename):
+    global data
+    f = open(filename, 'r')
+    for link in f:
+        index = link.find('ele=')
+        electorate = link[index+4:].strip()
+        add_electorate(electorate)
+        add_link(electorate, 'elect_link', link.strip())
+
+def dict_test(key):
+    '''tests progress of update to data. reports number of dicts remeain to be updated with key'''
+    global data
+    c = 0
+    for d in data:
+        if not key in d:
+            c += 1
+    return c
+
+def fix_spaces(key):
+    '''fixes spaces in URL's for given key'''
+    global data
+    for d in data:
+        if ' ' in d[key]:
+            d[key] = d[key].replace(' ', '%20')
+    data_dump()
+
+def clear_key(key):
+    '''removes all keys from data'''
+    global data
+    for d in data:
+        if key in d:
+            del d[key]
+    data_dump
+
+def save_speach(electorate, para_list):
+    '''saves a list of paragraphs to file using the electorate, returnes file-name'''
+    filename = 'first_speach_' + electorate + '.txt'
+    f = open(filename, 'a')
+    for p in para_list:
+        uni_string = p.text
+        string = uni_string.encode('ascii', 'ignore')
+        f.write(string + '\n')
+    f.close()
+    return filename
+
+def count(filename):
+    '''count words in file'''
+    f = open(filename, 'r')
+    count = 0
+    for p in f:
+        num = len(p.split())
+        count += num
+    return count
+
+
+'''
+def elect_links():    
+    b = mechanize.Browser()
+    anonymize(b)
+    base_url = 'http://www.aph.gov.au'
+    soup = BeautifulSoup(b.open('http://www.aph.gov.au/Senators_and_Members/Members'))
+    div = soup.find("div", id="divElectorate")
+    lis = div.findAll("li")
+    electorate = 
+    urls = [base_url + li.find("a").attrs["href"].strip() for li in lis]
+    f = open('elect_links.txt', 'w')
+    for i in urls:
+        f.write(i + '\n')
+    f.close
+    return urls
+'''
+
+def member_links():
+    b = mechanize.Browser()
+    anonymize(b)
+    base_url = 'http://www.aph.gov.au'
+    count = 1
+    data_load()
+    for d in data:
+        if not 'member_link' in d:
+            print ('--------')
+            #anon_test(b)
+            print ('getting link number {}' .format(count))
+            soup = BeautifulSoup(b.open(d['elect_link']))
+            print('Got link')
+            ul = soup.find('ul', {'class':"search-filter-results search-filter-results-thumbnails"})
+            p = ul.find('p')
+            link = p.find('a').attrs['href']
+            d['member_link'] = base_url + link
+            t = random.randrange(1, 9)
+            print('added link to data')
+            data_dump()
+            print('dumped data to data.txt')
+            c = dict_test('member_link')
+            print('{} links remaining...' .format(c))
+            print('waiting {} seconds' .format(t))
+            count += 1
+            time.sleep(t)
+            anonymize(b)
+
+def speach_links():
+    b = mechanize.Browser()
+    anonymize(b)
+    count = 1
+    data_load()
+    for d in data:
+        if not 'speach_link' in d:
+            print('---------------')
+            print ('getting link number {}' .format(count))
+            soup = BeautifulSoup(b.open(d['member_link']))
+            print('Got Link')
+            ul = soup.find('ul', {'class':'links'})
+            li = ul.find('li')
+            link = li.find('a').attrs['href']
+            d['speach_link'] = link
+            print('added link to data')
+            data_dump()
+            print('dumped data to data.txt')
+            c = dict_test('speach_link')
+            t = random.randrange(5,15)
+            print('{} speach links remaining...' .format(c))
+            print('waiting {} seconds' .format(t))
+            count += 1
+            time.sleep(t)
+            anonymize(b)
+            
+def speach_text():
+    b = mechanize.Browser()
+    anonymize(b)
+    count = 1
+    data_load()
+    for d in data:
+        if not 'speach_file' in d:
+            print('---------------')
+            print ('getting link number {}' .format(count))
+            soup = BeautifulSoup(b.open(d['speach_link']))
+            print('Got Link')
+            #GET DATE INFO
+            #date = soup.find('div', {'style': 'text-align:right'})
+            #date2 = date.contents
+            #date3 = date2[:1]
+            #d['speach_file'] = save_speach(d['electorate'], date3)
+            #GET TEXT
+            div = soup.find('div', {'id': 'documentContentPanel'})
+            para = div.findAll('p')
+            d['speach_file'] = save_speach(d['electorate'], para)
+            print('saved speach to file {}' .format(d['speach_file']))
+            data_dump()
+            print('dumped data to data.txt')
+            c = dict_test('speach_file')
+            t = random.randrange(3,9)
+            print('{} speach links remaining...' .format(c))
+            print('waiting {} seconds' .format(t))
+            count += 1
+            time.sleep(t)
+            anonymize(b)
+
+
+
+###_____________Analysis___________###
+
+total_words = {}
+
+def word_count():
+    '''add a tatal word count to the data dict'''
+    global data
+    data_load()
+    for d in data:
+        d['word_count'] = count(d['speach_file'])
+        data_dump()
+    
+
+
+def words_from_file(filename):
+    '''returns list of words from a file'''
+    f = open(filename, 'r')
+    para = []
+    words = []
+    for i in f:
+        para.append(i)
+    for i in para:
+        words.append(i)
+    f.close()
+    return words
+    
+def word_by_electorate(word):
+    '''counts instances of a certian word by electorate. returns dict'''
+    global data
+    output = {}
+    for d in data:
+        word_list = words_from_file(d['speach_file'])
+        count = 0
+        for i in word_list:
+            if i == word:
+                count += 1
+        output[d['electorate']] = count
+        
+    
+
+
+
+            
+    
+
+###__________ MAIN ________###
+
+def main():
+    global data
+    data_load()
+    speach_text()
+
+
+##________________________##
+
+ 
